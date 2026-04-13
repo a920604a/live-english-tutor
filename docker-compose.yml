@@ -1,0 +1,69 @@
+services:
+  # ── PostgreSQL（self-hosted）────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tutor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tutor}
+      POSTGRES_DB: ${POSTGRES_DB:-tutordb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tutor} -d ${POSTGRES_DB:-tutordb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tutor-net
+
+  # ── FastAPI Backend ─────────────────────────────────────────────────────────
+  # 前端由 Cloudflare Pages 部署，不需要 frontend 服務。
+  backend:
+    build:
+      context: ./backend-fastapi
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      # Override: ensure Docker service name is used for DB host
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://tutor:tutor@postgres:5432/tutordb}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tutor-net
+
+  # ── LiveKit Agent Worker ────────────────────────────────────────────────────
+  agent:
+    build:
+      context: ./livekit-agent
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      # Override: use Docker internal service name instead of localhost
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - tutor-net
+
+  # ── Ollama（本地自架，已停用 — 使用外部 192.168.15.235:11434）──────────────
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   networks:
+  #     - tutor-net
+
+volumes:
+  postgres-data:
+  # ollama-data:
+
+networks:
+  tutor-net:
+    driver: bridge
