@@ -3,12 +3,15 @@ TutorAgent: custom Agent subclass that holds teaching state and
 exposes function tools the LLM can call to drive the lesson.
 """
 import json
+import logging
 
 from livekit.agents import Agent, RunContext, function_tool
 
 from agent.backend_client import BackendClient
 from agent.prompts import build_system_prompt
 from agent.state_machine import TeachingStateMachine, TeachingState
+
+logger = logging.getLogger(__name__)
 
 
 class TutorAgent(Agent):
@@ -42,17 +45,22 @@ class TutorAgent(Agent):
             corrected_text: The grammatically correct version.
             explanation: A brief, encouraging explanation of the error (1-2 sentences).
         """
-        # Update state machine
+        logger.info(
+            "[%d] 🔧 TOOL record_grammar_correction\n"
+            "          original:    %s\n"
+            "          corrected:   %s\n"
+            "          explanation: %s",
+            self._session_id, original_text, corrected_text, explanation,
+        )
+
         self.sm.record_correction(original_text, corrected_text, explanation)
 
-        # Persist to backend DB
         await self._backend.post_correction(
             original=original_text,
             corrected=corrected_text,
             explanation=explanation,
         )
 
-        # Push real-time correction to frontend via LiveKit data channel
         await _publish_to_room(
             context,
             topic="tutor.correction",
@@ -65,10 +73,13 @@ class TutorAgent(Agent):
         )
 
         self.sm.exit_correction()
-        # Update agent instructions for current state
         self.instructions = build_system_prompt(self.sm.state, self.sm.topic)
 
-        return f"Correction recorded and sent to student."
+        logger.debug(
+            "[%d] 🔧 correction done — state=%s corrections_total=%d",
+            self._session_id, self.sm.state, self.sm.correction_count,
+        )
+        return "Correction recorded and sent to student."
 
     @function_tool()
     async def advance_lesson_state(self, context: RunContext) -> str:
@@ -77,7 +88,11 @@ class TutorAgent(Agent):
         self.sm.advance()
         self.instructions = build_system_prompt(self.sm.state, self.sm.topic)
 
-        # Notify frontend of state change
+        logger.info(
+            "[%d] 📈 TOOL advance_lesson_state  %s → %s  (turn=%d)",
+            self._session_id, previous, self.sm.state, self.sm.turn_count,
+        )
+
         await _publish_to_room(
             context,
             topic="tutor.state",
@@ -89,11 +104,13 @@ class TutorAgent(Agent):
     @function_tool()
     async def get_lesson_state(self, context: RunContext) -> str:
         """Get the current lesson state and progress information."""
-        return (
+        result = (
             f"State: {self.sm.state}, "
             f"Turns: {self.sm.turn_count}, "
             f"Corrections made: {self.sm.correction_count}"
         )
+        logger.debug("[%d] 📊 TOOL get_lesson_state  %s", self._session_id, result)
+        return result
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -104,5 +121,6 @@ async def _publish_to_room(context: RunContext, topic: str, payload: dict) -> No
         data = json.dumps(payload).encode()
         room = context.session.room
         await room.local_participant.publish_data(data, reliable=True, topic=topic)
-    except Exception:
-        pass  # data channel publish is best-effort
+        logger.debug("Published data  topic=%s  payload=%s", topic, payload)
+    except Exception as exc:
+        logger.warning("publish_data failed  topic=%s  error=%s", topic, exc)

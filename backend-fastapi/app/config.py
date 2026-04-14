@@ -21,9 +21,12 @@ class Settings(BaseSettings):
     # Cloud 模式：留空，自動 fallback 到 LIVEKIT_URL。
     LIVEKIT_PUBLIC_URL: str = ""
 
-    # Google Gemini（報告生成用）
+    # Google Gemini（Agent Realtime 用）
     GOOGLE_API_KEY: str = ""
-    GOOGLE_REPORT_MODEL: str = "gemini-2.5-flash-native-audio-preview-12-2025"
+
+    # Ollama（報告生成用）
+    OLLAMA_BASE_URL: str = "http://192.168.15.235:11434/v1"
+    OLLAMA_MODEL: str = "gemma4:e2b"
 
     # Internal agent secret
     INTERNAL_SECRET: str = "internal-agent-secret"

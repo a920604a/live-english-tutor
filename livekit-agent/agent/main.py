@@ -35,12 +35,33 @@ if _missing:
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
 
-    # Parse session_id from room name convention "session-{id}"
     session_id = _parse_session_id(ctx.room.name)
-    topic = ctx.room.metadata or "general conversation"  # frontend sets topic in room metadata
+    topic = ctx.room.metadata or "general conversation"
+
+    logger.info(
+        "━━ Session START  room=%s  session_id=%d  topic=%s",
+        ctx.room.name, session_id, topic,
+    )
 
     backend = BackendClient(session_id=session_id)
-    logger.info("Agent joined room %s (session_id=%d, topic=%s)", ctx.room.name, session_id, topic)
+
+    # ── Room-level participant events ─────────────────────────────────────────
+
+    @ctx.room.on("participant_connected")
+    def on_participant_connected(participant) -> None:
+        logger.info(
+            "[%d] 👤 Participant joined   identity=%s  name=%s",
+            session_id, participant.identity, participant.name or "(no name)",
+        )
+
+    @ctx.room.on("participant_disconnected")
+    def on_participant_disconnected(participant) -> None:
+        logger.info(
+            "[%d] 👋 Participant left    identity=%s",
+            session_id, participant.identity,
+        )
+
+    # ── AgentSession ──────────────────────────────────────────────────────────
 
     session = AgentSession(
         # Google Gemini Realtime: handles voice input (STT) + reasoning (LLM) + voice output (TTS)
@@ -52,37 +73,52 @@ async def entrypoint(ctx: JobContext) -> None:
 
     agent = TutorAgent(session_id=session_id, backend=backend, topic=topic)
 
-    # Persist conversation messages to backend
+    # ── Session-level events ──────────────────────────────────────────────────
+
+    @session.on("agent_state_changed")
+    def on_agent_state_changed(event) -> None:
+        # state: idle / listening / thinking / speaking
+        state = getattr(event, "state", event)
+        logger.debug("[%d] 🤖 Agent state → %s", session_id, state)
+
     @session.on("user_input_transcribed")
     async def on_transcript(event) -> None:
-        if event.is_final:
-            await backend.post_message(role="student", content=event.transcript)
+        if not event.is_final:
+            return
+        text = event.transcript
+        logger.info("[%d] 🎤 STUDENT  %s", session_id, text)
+        await backend.post_message(role="student", content=text)
 
     @session.on("agent_speech_committed")
     async def on_agent_speech(event) -> None:
-        await backend.post_message(role="tutor", content=str(event.user_msg))
+        content = str(event.user_msg)
+        preview = content[:150] + ("…" if len(content) > 150 else "")
+        logger.info("[%d] 🔊 EMMA     %s", session_id, preview)
+        await backend.post_message(role="tutor", content=content)
+
+    @session.on("agent_speech_interrupted")
+    def on_agent_speech_interrupted(event) -> None:
+        logger.info("[%d] ✋ EMMA speech interrupted by student", session_id)
 
     @session.on("close")
     async def on_close(event) -> None:
-        await backend.notify_session_ended()  # also calls backend.aclose()
-        logger.info("Session %d ended", session_id)
+        logger.info("━━ Session END    session_id=%d", session_id)
+        await backend.notify_session_ended()
 
-    # Job shutdown fallback — fires on crash / OOM / forced termination
-    # where session "close" event may not have had a chance to run.
+    # Job shutdown fallback — fires on crash / OOM / forced termination.
     async def _on_job_shutdown(reason: str) -> None:
-        logger.info(
-            "Job shutdown: room=%s session_id=%d reason=%s",
+        logger.warning(
+            "━━ Job shutdown   room=%s  session_id=%d  reason=%s",
             ctx.room.name, session_id, reason,
         )
         if not backend._client.is_closed:
-            # notify_session_ended was not called yet — best-effort fire
             await backend.notify_session_ended()
 
     ctx.add_shutdown_callback(_on_job_shutdown)
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Kick off the lesson with a greeting
+    logger.info("[%d] 💬 Sending initial greeting", session_id)
     await session.generate_reply(
         instructions="Greet the student warmly by name if possible, introduce yourself as Emma, "
         "and begin the warm-up phase with a friendly opening question."
