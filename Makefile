@@ -1,5 +1,6 @@
 .PHONY: help up down restart rebuild ps \
         logs logs-backend logs-agent logs-db \
+        livekit-up livekit-down livekit-logs \
         fe-install fe-dev fe-build \
         db-shell env clean
 
@@ -16,6 +17,12 @@ help:
 	@echo "  make restart       重新啟動所有服務"
 	@echo "  make rebuild       重新建置 image 並啟動"
 	@echo "  make ps            顯示服務狀態"
+	@echo ""
+	@echo "  Self-hosted LiveKit（選配，獨立啟動）"
+	@echo "  -------------------------------------"
+	@echo "  make livekit-up    啟動自架 LiveKit server（需先 make up）"
+	@echo "  make livekit-down  停止自架 LiveKit server"
+	@echo "  make livekit-logs  追蹤 LiveKit server log"
 	@echo ""
 	@echo "  Log 查看"
 	@echo "  --------"
@@ -99,3 +106,17 @@ clean:
 	@echo "警告：這將移除所有 Docker volumes（包含資料庫資料）"
 	@read -p "確定要繼續嗎？[y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	docker compose down -v
+
+# ── Self-hosted LiveKit（獨立 Compose）───────────────────────────────────────
+# 使用方式：先 make up，再 make livekit-up
+# .env 需設定：
+#   LIVEKIT_URL=ws://livekit:7880          (Agent 用，Docker 內部)
+#   LIVEKIT_PUBLIC_URL=ws://localhost:7880  (瀏覽器用，backend 回傳)
+livekit-up:
+	docker compose -f docker-compose.livekit.yml up -d
+
+livekit-down:
+	docker compose -f docker-compose.livekit.yml down
+
+livekit-logs:
+	docker compose -f docker-compose.livekit.yml logs -f livekit

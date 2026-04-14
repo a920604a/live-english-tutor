@@ -67,3 +67,4 @@ volumes:
 networks:
   tutor-net:
     driver: bridge
+    name: tutor-net   # 固定名稱（不帶 project prefix），供獨立的 docker-compose.livekit.yml 以 external 加入

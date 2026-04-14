@@ -12,10 +12,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from livekit.agents import AgentSession, JobContext, WorkerOptions, cli
-# STT/TTS disabled — imports kept for future re-activation
-# from livekit.plugins import cartesia, deepgram, silero
-from livekit.plugins import openai as lk_openai
+from livekit.agents import AgentSession, JobContext, JobProcess, WorkerOptions, cli
+# STT/TTS (deepgram, cartesia) disabled — imports kept for future re-activation
+# from livekit.plugins import cartesia, deepgram
+from livekit.plugins import openai as lk_openai, silero
 
 from agent.backend_client import BackendClient
 from agent.tutor_agent import TutorAgent
@@ -35,6 +35,27 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://192.168.15.235:11434/v1")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:35b")
 
 
+# ── Prewarm ───────────────────────────────────────────────────────────────────
+
+def prewarm(proc: JobProcess) -> None:
+    """
+    Runs once when the Worker process starts, before any session is assigned.
+    Heavy model loading should happen here so it is paid once, not per session.
+
+    VAD model weights are pre-baked into the Docker image (Dockerfile RUN step),
+    so this call is near-instant at runtime — it just mmaps the cached .onnx file.
+
+    STT/TTS (deepgram, cartesia) are still disabled.
+    When re-enabling, restore their imports and add to AgentSession:
+        stt=deepgram.STT(model="nova-3", language="en-US"),
+        tts=cartesia.TTS(model="sonic-2"),
+    """
+    proc.userdata["vad"] = silero.VAD.load()
+    logger.info("Prewarm complete — Silero VAD model loaded")
+
+
+# ── Session entrypoint ────────────────────────────────────────────────────────
+
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
 
@@ -46,9 +67,12 @@ async def entrypoint(ctx: JobContext) -> None:
     logger.info("Agent joined room %s (session_id=%d, topic=%s)", ctx.room.name, session_id, topic)
 
     session = AgentSession(
+        # VAD: pre-warmed in prewarm() — picks up the model from proc.userdata
+        vad=ctx.proc.userdata["vad"],
         # ── STT/TTS disabled ──────────────────────────────────────────────
-        # To re-enable, uncomment the 3 lines below and restore imports above
-        # vad=silero.VAD.load(),
+        # To re-enable:
+        #   1. Restore imports: cartesia, deepgram
+        #   2. Uncomment lines below
         # stt=deepgram.STT(model="nova-3", language="en-US"),
         # tts=cartesia.TTS(model="sonic-2"),
         # ─────────────────────────────────────────────────────────────────
@@ -74,8 +98,21 @@ async def entrypoint(ctx: JobContext) -> None:
 
     @session.on("close")
     async def on_close(event) -> None:
-        await backend.notify_session_ended()
+        await backend.notify_session_ended()  # also calls backend.aclose()
         logger.info("Session %d ended", session_id)
+
+    # Job shutdown fallback — fires on crash / OOM / forced termination
+    # where session "close" event may not have had a chance to run.
+    async def _on_job_shutdown(reason: str) -> None:
+        logger.info(
+            "Job shutdown: room=%s session_id=%d reason=%s",
+            ctx.room.name, session_id, reason,
+        )
+        if not backend._client.is_closed:
+            # notify_session_ended was not called yet — best-effort fire
+            await backend.notify_session_ended()
+
+    ctx.add_shutdown_callback(_on_job_shutdown)
 
     await session.start(agent=agent, room=ctx.room)
 
@@ -86,6 +123,8 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
 def _parse_session_id(room_name: str) -> int:
     """Extract session id from room name 'session-{id}'."""
     try:
@@ -95,4 +134,9 @@ def _parse_session_id(room_name: str) -> int:
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            prewarm_fnc=prewarm,
+        )
+    )

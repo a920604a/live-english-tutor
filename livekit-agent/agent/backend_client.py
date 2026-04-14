@@ -1,7 +1,12 @@
 """
 HTTP client for posting events from the agent back to the FastAPI backend.
 Uses a shared internal secret header for authentication.
+
+Design: one persistent AsyncClient per BackendClient instance (= per session).
+This avoids the overhead of opening a new TCP connection for every API call.
+Call `aclose()` (or use as async context manager) when the session ends.
 """
+import logging
 import os
 
 import httpx
@@ -9,40 +14,66 @@ import httpx
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 INTERNAL_SECRET = os.getenv("INTERNAL_SECRET", "internal-agent-secret")
 
-_HEADERS = {"x-internal-secret": INTERNAL_SECRET}
+logger = logging.getLogger(__name__)
 
 
 class BackendClient:
     def __init__(self, session_id: int) -> None:
         self._session_id = session_id
+        # Persistent client — shared across all calls within a session.
+        # base_url + default headers are set once here, not repeated per call.
+        self._client = httpx.AsyncClient(
+            base_url=BACKEND_URL,
+            headers={"x-internal-secret": INTERNAL_SECRET},
+            timeout=10.0,
+        )
+
+    # ── Public API ────────────────────────────────────────────────────────────
 
     async def post_message(self, role: str, content: str) -> None:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(
-                f"{BACKEND_URL}/internal/agent/message",
-                json={"session_id": self._session_id, "role": role, "content": content},
-                headers=_HEADERS,
-            )
+        await self._post(
+            "/internal/agent/message",
+            json={"session_id": self._session_id, "role": role, "content": content},
+        )
 
     async def post_correction(
         self, original: str, corrected: str, explanation: str
     ) -> None:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(
-                f"{BACKEND_URL}/internal/agent/correction",
-                json={
-                    "session_id": self._session_id,
-                    "original_text": original,
-                    "corrected_text": corrected,
-                    "explanation": explanation,
-                },
-                headers=_HEADERS,
-            )
+        await self._post(
+            "/internal/agent/correction",
+            json={
+                "session_id": self._session_id,
+                "original_text": original,
+                "corrected_text": corrected,
+                "explanation": explanation,
+            },
+        )
 
     async def notify_session_ended(self) -> None:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(
-                f"{BACKEND_URL}/internal/agent/session-ended",
-                params={"session_id": self._session_id},
-                headers=_HEADERS,
-            )
+        await self._post(
+            "/internal/agent/session-ended",
+            params={"session_id": self._session_id},
+        )
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        """Close the underlying HTTP connection pool. Call once when the session ends."""
+        if not self._client.is_closed:
+            await self._client.aclose()
+
+    # ── Async context manager support ─────────────────────────────────────────
+
+    async def __aenter__(self) -> "BackendClient":
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        await self.aclose()
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    async def _post(self, path: str, **kwargs) -> None:
+        """POST helper — best-effort, logs errors without raising."""
+        try:
+            await self._client.post(path, **kwargs)
+        except Exception as exc:
+            logger.warning("BackendClient POST %s failed: %s", path, exc)

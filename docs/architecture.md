@@ -467,7 +467,7 @@ Browser              FastAPI Backend          Ollama LLM         PostgreSQL
 
 ## 8. Deployment Topology
 
-### Docker Compose (Backend + Agent)
+### Mode A — LiveKit Cloud（預設）
 
 ```
 docker-compose.yml
@@ -476,14 +476,40 @@ docker-compose.yml
 │   └── health: pg_isready
 │
 ├── backend            port 8000 ── depends_on: postgres (healthy)
-│   └── env_file: .env
-│   └── override: DATABASE_URL=postgresql://...@postgres:5432/tutordb
+│   └── LIVEKIT_URL → wss://your-project.livekit.cloud  (from .env)
+│   └── LIVEKIT_PUBLIC_URL= (empty → fallback to LIVEKIT_URL)
 │
 └── agent              (no exposed port) ── depends_on: backend
-    └── env_file: .env
-    └── override: BACKEND_URL=http://backend:8000
+    └── LIVEKIT_URL → wss://your-project.livekit.cloud  (from .env)
 
-Network: tutor-net (bridge)
+Network: tutor-net (bridge, name: tutor-net)
+Command: make up
+```
+
+### Mode B — Self-hosted LiveKit（獨立 Compose）
+
+```
+docker-compose.yml                     docker-compose.livekit.yml
+│                                      │
+├── postgres  port 5432                └── livekit  port 7880 (WS)
+│                                                   port 7881 (WSS)
+├── backend   port 8000                             UDP 50000-60000 (media)
+│   LIVEKIT_URL=ws://livekit:7880          LIVEKIT_KEYS=key:secret
+│   LIVEKIT_PUBLIC_URL=ws://localhost:7880  network: tutor-net (external)
+│
+└── agent
+    LIVEKIT_URL=ws://livekit:7880
+
+共用網路: tutor-net (固定名稱，不帶 project prefix)
+跨 Compose DNS: agent 容器可直接用 hostname "livekit" 解析到 livekit 容器
+
+URL 流向:
+  Backend 生成 token → 使用 LIVEKIT_URL (ws://livekit:7880)
+  Backend 回傳給前端 → LIVEKIT_PUBLIC_URL (ws://localhost:7880)  ← 瀏覽器連線
+  Agent SDK 讀取    → LIVEKIT_URL (ws://livekit:7880)            ← 容器內連線
+
+啟動: make up && make livekit-up
+停止: make livekit-down && make down
 ```
 
 ### Frontend (Cloudflare Pages)
@@ -529,7 +555,10 @@ Cloudflare Pages
 | Backend (FastAPI) | 8000 | Exposed on host |
 | PostgreSQL | 5432 | Exposed on host (for db-shell) |
 | Ollama | 11434 | External server, not in Docker |
-| LiveKit Cloud | 443 / UDP | External, no local port |
+| LiveKit Cloud | 443 / UDP | Cloud mode (`make up`)，無本地 port |
+| LiveKit self-hosted WS | 7880 | `make livekit-up` 才啟用 |
+| LiveKit self-hosted WSS | 7881 | selfhost 模式，dev 不使用 |
+| LiveKit WebRTC media | 50000-60000/UDP | selfhost 模式，音訊必須開放 |
 
 ---
 

@@ -77,7 +77,7 @@ def get_livekit_token(
         participant_identity=f"user-{current_user.id}",
         participant_name=current_user.full_name or current_user.email,
     )
-    return LiveKitTokenOut(token=token, url=settings.LIVEKIT_URL)
+    return LiveKitTokenOut(token=token, url=settings.LIVEKIT_PUBLIC_URL or settings.LIVEKIT_URL)
 
 
 @router.post("/{session_id}/end", response_model=SessionOut)
