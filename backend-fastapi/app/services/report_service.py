@@ -4,18 +4,24 @@ from app.config import settings
 
 
 async def generate_session_report(transcript: str, corrections: list[dict]) -> str:
-    """Call Ollama to generate a structured learning report."""
+    """Call Google Gemini to generate a structured learning report."""
+    if not settings.GOOGLE_API_KEY:
+        raise RuntimeError("GOOGLE_API_KEY is not set — cannot generate report")
+
     prompt = _build_report_prompt(transcript, corrections)
+
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(
-            f"{settings.OLLAMA_BASE_URL}/chat/completions",
+            f"https://generativelanguage.googleapis.com/v1beta/models"
+            f"/{settings.GOOGLE_REPORT_MODEL}:generateContent",
+            params={"key": settings.GOOGLE_API_KEY},
             json={
-                "model": settings.OLLAMA_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
+                "contents": [{"parts": [{"text": prompt}]}],
             },
         )
         response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+
+    return response.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _build_report_prompt(transcript: str, corrections: list[dict]) -> str:

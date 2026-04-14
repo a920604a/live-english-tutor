@@ -14,10 +14,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 RUN uv sync --no-cache
 
-# Pre-download Silero VAD model weights at build time
-# Bakes the .onnx weights into the image so runtime has zero cold-start delay
-RUN uv run python -c "from livekit.plugins import silero; silero.VAD.load()"
-
 COPY . .
 
 CMD ["uv", "run", "python", "-m", "agent.main", "start"]

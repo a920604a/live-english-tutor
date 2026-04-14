@@ -94,7 +94,8 @@ def end_session(
     session.ended_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(session)
-    background_tasks.add_task(_generate_report, session_id, db)
+    if settings.ENABLE_REPORT_GENERATION:
+        background_tasks.add_task(_generate_report, session_id, db)
     return session
 
 
