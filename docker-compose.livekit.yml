@@ -29,11 +29,16 @@ services:
     environment:
       # LiveKit server 透過 LIVEKIT_KEYS 讀取金鑰，格式為 "key:secret"
       # 與 .env 的 LIVEKIT_API_KEY / LIVEKIT_API_SECRET 共用，無需另設
-      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}"
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      # ICE UDP port range — 必須與下方 ports 一致
+      # Linux ephemeral ports 通常是 32768-60999，50000-60000 會衝突
+      # 改用 40000-40100（ephemeral range 以外，本機開發 100 個 port 足夠）
+      LIVEKIT_RTC_PORT_RANGE_START: "40000"
+      LIVEKIT_RTC_PORT_RANGE_END: "40100"
     ports:
-      - "7880:7880"                    # HTTP WebSocket（ws://）— 瀏覽器 + 外部
-      - "7881:7881"                    # HTTPS WebSocket（wss://）— 生產 TLS（dev 未啟用）
-      - "50000-60000:50000-60000/udp"  # WebRTC media plane（音訊流，必須開放）
+      - "7880:7880"                  # HTTP WebSocket（ws://）— 瀏覽器 + 外部
+      - "7881:7881"                  # HTTPS WebSocket（wss://）— 生產 TLS（dev 未啟用）
+      - "40000-40100:40000-40100/udp" # WebRTC media plane（ICE candidates，音訊流）
     healthcheck:
       # livekit-server image 為 minimal，使用 busybox wget 做健康檢查
       test: ["CMD-SHELL", "wget -qO- http://localhost:7880/ || exit 1"]
