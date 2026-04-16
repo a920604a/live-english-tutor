@@ -110,6 +110,8 @@ def get_report(
 ):
     session = _get_owned_session(session_id, current_user.id, db)
     if session.report_text is None:
+        if not settings.ENABLE_REPORT_GENERATION:
+            return {"status": "disabled", "report": None}
         return {"status": "pending", "report": None}
     return {"status": "ready", "report": session.report_text}
 

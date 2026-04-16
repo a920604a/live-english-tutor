@@ -19,9 +19,10 @@ export default function ReportPage() {
         if (result.status === "ready" && result.report) {
           setReport(result.report);
           setStatus("ready");
+        } else if (result.status === "disabled") {
+          setStatus("unavailable");
         } else {
           pollCountRef.current += 1;
-          // Stop polling after 40 attempts (~2 minutes) — report generation is disabled or failed.
           if (pollCountRef.current >= 40) {
             setStatus("unavailable");
             return;

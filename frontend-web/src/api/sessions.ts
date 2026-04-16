@@ -40,7 +40,7 @@ export async function endSession(id: number): Promise<Session> {
   return data;
 }
 
-export async function getReport(id: number): Promise<{ status: string; report: string | null }> {
+export async function getReport(id: number): Promise<{ status: "pending" | "ready" | "disabled"; report: string | null }> {
   const { data } = await client.get(`/sessions/${id}/report`);
   return data;
 }
