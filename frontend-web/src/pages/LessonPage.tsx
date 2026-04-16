@@ -138,16 +138,14 @@ export default function LessonPage() {
         //
         // VITE_LIVEKIT_URL can still force a specific URL (e.g. LiveKit Cloud
         // in production builds). Empty string or unset = auto behaviour below.
-        const envUrl = import.meta.env.VITE_LIVEKIT_URL;
-        if (envUrl) {
-          // Explicit non-empty override (e.g. wss://your-project.livekit.cloud)
-          setServerUrl(envUrl);
-        } else if (import.meta.env.DEV) {
-          // Dev: proxy through Vite dev server origin (ws://localhost:5173)
+        if (import.meta.env.DEV) {
+          // Dev mode: always proxy through Vite (/rtc → localhost:7880).
+          // Avoids VS Code SSH tunnel WebSocket issues on port 7880.
+          // VITE_LIVEKIT_URL is intentionally ignored in dev.
           setServerUrl(window.location.origin.replace(/^http/, "ws"));
         } else {
-          // Production: use the URL returned by the backend
-          setServerUrl(url);
+          // Production: VITE_LIVEKIT_URL override, else backend-supplied URL.
+          setServerUrl(import.meta.env.VITE_LIVEKIT_URL || url);
         }
       })
       .catch(console.error);

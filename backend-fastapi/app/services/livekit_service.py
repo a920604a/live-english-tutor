@@ -24,6 +24,17 @@ async def ensure_room_and_dispatch(room_name: str) -> None:
     try:
         # Idempotent — safe to call even if the room already exists.
         await lk.room.create_room(CreateRoomRequest(name=room_name))
+
+        # Only dispatch if no agent is already pending/running in this room.
+        # Prevents double-dispatch (e.g. React StrictMode calling the endpoint twice).
+        existing = await lk.agent_dispatch.list_dispatch(room_name)
+        if existing:
+            logger.info(
+                "Agent already dispatched for room %s (%d dispatch(es)), skipping",
+                room_name, len(existing),
+            )
+            return
+
         await lk.agent_dispatch.create_dispatch(
             CreateAgentDispatchRequest(room=room_name, agent_name="")
         )
