@@ -1,8 +1,8 @@
 # PRD — 產品需求文件（Product Requirements Document）
 
 **產品**：Live English Tutor  
-**版本**：v0.1 MVP  
-**日期**：2026-04-10  
+**版本**：v0.2  
+**日期**：2026-04-16  
 **狀態**：進行中
 
 ---
@@ -13,7 +13,7 @@
 **Live English Tutor**
 
 ### 1.2 產品定位
-一套以即時語音為核心的 AI 英文家教系統。學生透過麥克風與 AI 老師（Emma）進行真人感對話練習，系統即時糾錯、生成課後報告，並長期追蹤學習進度。
+一套以即時語音為核心的 AI 英文家教系統。學生透過麥克風（與選配攝影機 / 螢幕分享）與 AI 老師（Emma）進行真人感對話練習，系統即時糾錯、生成課後報告。
 
 ### 1.3 核心主張（Value Proposition）
 
@@ -60,18 +60,22 @@
 
 ## 4. 產品目標（Product Goals）
 
-### Phase 1 — MVP（目前開發中）
-- ✅ 使用者可以用語音和 AI 老師對話
+### Phase 1 — MVP（目前）
+- ✅ 使用者可以用語音和 AI 老師對話（Gemini Realtime 原生音訊）
 - ✅ AI 老師依課程主題引導對話
 - ✅ 即時顯示語法糾正
 - ✅ 課後生成結構化學習報告
 - ✅ 保存所有課程紀錄
+- 🔄 字幕面板（對話泡泡，可開關）
+- 🔄 麥克風 Toggle 模式（取代 hold-to-speak）
+- 🔄 攝影機 + 螢幕分享（Emma 可看見畫面）
 
 ### Phase 2 — Enhancement
 - 多語言介面（繁中 / 英文）
 - 發音評分（phoneme-level feedback）
 - 單字本（從課程中自動收集生字）
 - 學習進度儀表板（圖表）
+- 噪音消除（noise cancellation plugin）
 
 ### Phase 3 — Scale
 - Android / iOS App
@@ -85,9 +89,12 @@
 
 | 功能類別 | 功能項目 | MVP | Phase 2 |
 |---------|---------|:---:|:-------:|
-| 身分驗證 | Email 註冊 / 登入 | ✅ | |
+| 身分驗證 | Google Sign-In（Firebase Auth） | ✅ | |
 | 課程管理 | 選擇課程主題 | ✅ | |
 | 即時語音 | AI 老師語音對話 | ✅ | |
+| 字幕 | 對話逐字幕（可開關） | 🔄 | |
+| 麥克風 | Toggle 開關模式 | 🔄 | |
+| 視訊 | 攝影機 + 螢幕分享（Emma 可接收） | 🔄 | |
 | 教學引導 | 分階段教學流程 | ✅ | |
 | 糾錯 | 即時語法糾正顯示 | ✅ | |
 | 課後報告 | AI 生成學習報告 | ✅ | |
@@ -116,22 +123,21 @@
 
 | 指標 | 目標 |
 |------|------|
-| STT 回應延遲 | ≤ 300ms（Deepgram nova-3） |
-| LLM 回應延遲（首 token） | ≤ 2s（qwen3.5:35b on A6000） |
-| TTS 語音啟動延遲 | ≤ 500ms |
 | 端對端對話延遲（說完→聽到回應） | ≤ 3s（目標）/ 5s（可接受） |
-| 課後報告生成時間 | ≤ 60s |
+| 課後報告生成時間 | ≤ 60s（Ollama） |
+| LiveKit 房間建立延遲 | ≤ 2s |
+
+> 使用 Gemini Realtime 原生音訊模型，STT / LLM / TTS 合一，不再有個別服務延遲需考量。
 
 ### 7.2 可靠性
-- Agent 斷線自動重連（LiveKit Cloud 管理）
+- Agent 斷線自動重連（LiveKit Agent SDK 管理）
 - 課程訊息即時持久化（非批次寫入）
 - 報告生成失敗不影響課程紀錄
 
 ### 7.3 安全性
-- JWT Token（24h 有效期）保護所有使用者 API
+- Firebase ID Token 驗證（Firebase Admin SDK server-side verify）
 - Agent→Backend 使用 Internal Secret Header 隔離內部呼叫
 - 使用者只能存取自己的課程資料（ownership check）
-- 密碼 bcrypt 雜湊儲存
 
 ### 7.4 擴展性
 - 無狀態 FastAPI，可水平擴展
@@ -152,9 +158,8 @@
 
 ---
 
-## 9. 範圍外（Out of Scope — MVP）
+## 9. 範圍外（Out of Scope — 目前）
 
-- 視訊功能（只有音訊）
 - 多位學生同一房間
 - 真人老師接入
 - 課程付費 / 訂閱系統
@@ -169,11 +174,10 @@
 | 層次 | 技術 |
 |------|------|
 | Frontend | React 18 + TypeScript + Vite + Zustand + Axios |
-| Real-time Voice | LiveKit Cloud + @livekit/components-react |
-| Backend | FastAPI + SQLAlchemy 2.0 + PostgreSQL |
-| AI Agent | LiveKit Agents SDK（Python） |
-| STT | Deepgram nova-3 |
-| TTS | Cartesia Sonic |
-| LLM | Ollama（外部伺服器 192.168.15.235，qwen3.5:35b） |
-| VAD | Silero VAD |
-| Infra | Docker Compose |
+| Real-time | LiveKit（Self-hosted）+ @livekit/components-react |
+| Backend | FastAPI + SQLAlchemy 2.0 + PostgreSQL 16 |
+| AI Agent | LiveKit Agents SDK 1.x（Python） |
+| 語音模型 | Google Gemini 2.5 Flash Native Audio（STT + LLM + TTS 一體） |
+| 報告生成 | Ollama（外部伺服器，OpenAI 相容 API） |
+| 認證 | Firebase Authentication（Google Sign-In） |
+| 部署 | Docker Compose（後端）、Cloudflare Pages（前端） |
