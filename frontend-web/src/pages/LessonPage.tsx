@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { LiveKitRoom, RoomAudioRenderer, useVoiceAssistant } from "@livekit/components-react";
+import { LiveKitRoom, RoomAudioRenderer, useVoiceAssistant, useParticipants, useConnectionState } from "@livekit/components-react";
+import { ConnectionState } from "livekit-client";
 import { endSession, getSessionToken } from "../api/sessions";
 import CorrectionPanel from "../components/lesson/CorrectionPanel";
 import AgentStatus from "../components/lesson/AgentStatus";
@@ -26,7 +27,49 @@ function EmmaAvatar() {
   );
 }
 
-function LessonInner({ sessionId, onEnd, ending }: { sessionId: string; onEnd: () => void; ending: boolean }) {
+/** Dev-only panel: connection state + room participants */
+function DebugPanel({ serverUrl }: { serverUrl: string }) {
+  const connectionState = useConnectionState();
+  const participants = useParticipants();
+
+  const stateColor: Record<string, string> = {
+    [ConnectionState.Connected]:    "text-emerald-400",
+    [ConnectionState.Connecting]:   "text-amber-400",
+    [ConnectionState.Reconnecting]: "text-amber-400",
+    [ConnectionState.Disconnected]: "text-rose-400",
+  };
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-xs font-mono px-3 py-2 z-50 border-t border-white/10 space-y-0.5">
+      <div>
+        <span className="text-white/40">WS → </span>
+        <span className="text-sky-300 break-all">{serverUrl}</span>
+      </div>
+      <div>
+        <span className="text-white/40">Room: </span>
+        <span className={stateColor[connectionState] ?? "text-white"}>
+          {connectionState}
+        </span>
+      </div>
+      <div>
+        <span className="text-white/40">Participants ({participants.length}): </span>
+        {participants.length === 0
+          ? <span className="text-white/30">none</span>
+          : participants.map((p) => (
+            <span key={p.identity} className="mr-2">
+              <span className={p.identity.startsWith("agent-") ? "text-violet-300" : "text-emerald-300"}>
+                {p.identity}
+              </span>
+              {p.name ? <span className="text-white/40"> ({p.name})</span> : null}
+            </span>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+function LessonInner({ sessionId, onEnd, ending, serverUrl }: { sessionId: string; onEnd: () => void; ending: boolean; serverUrl: string }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex flex-col">
       <RoomAudioRenderer />
@@ -69,6 +112,9 @@ function LessonInner({ sessionId, onEnd, ending }: { sessionId: string; onEnd: (
       <div className="px-4 pb-6 max-w-lg w-full mx-auto">
         <CorrectionPanel />
       </div>
+
+      {/* Dev-only debug overlay */}
+      {import.meta.env.DEV && <DebugPanel serverUrl={serverUrl} />}
     </div>
   );
 }
@@ -85,16 +131,22 @@ export default function LessonPage() {
     getSessionToken(Number(id))
       .then(({ token, url }) => {
         setToken(token);
-        // VITE_LIVEKIT_URL overrides the backend-supplied URL.
-        // For VS Code SSH remote dev: set VITE_LIVEKIT_URL="" (empty string)
-        // in frontend-web/.env.local so the client uses the Vite dev-server
-        // origin (already port-forwarded by VS Code) instead of reaching
-        // ws://localhost:7880 directly.
-        const override = import.meta.env.VITE_LIVEKIT_URL;
-        if (override !== undefined) {
-          // Empty string → use current page origin (Vite dev server, e.g. ws://localhost:5173)
-          setServerUrl(override || `${window.location.origin.replace(/^http/, "ws")}`);
+        // In Vite dev mode, always route LiveKit signaling through the Vite
+        // dev server (/rtc is proxied to localhost:7880 in vite.config.ts).
+        // This avoids VS Code SSH tunnel issues where WebSocket to port 7880
+        // gets closed mid-handshake. Port 5173 (Vite) is already forwarded.
+        //
+        // VITE_LIVEKIT_URL can still force a specific URL (e.g. LiveKit Cloud
+        // in production builds). Empty string or unset = auto behaviour below.
+        const envUrl = import.meta.env.VITE_LIVEKIT_URL;
+        if (envUrl) {
+          // Explicit non-empty override (e.g. wss://your-project.livekit.cloud)
+          setServerUrl(envUrl);
+        } else if (import.meta.env.DEV) {
+          // Dev: proxy through Vite dev server origin (ws://localhost:5173)
+          setServerUrl(window.location.origin.replace(/^http/, "ws"));
         } else {
+          // Production: use the URL returned by the backend
           setServerUrl(url);
         }
       })
@@ -126,7 +178,7 @@ export default function LessonPage() {
 
   return (
     <LiveKitRoom token={token} serverUrl={serverUrl} connect audio video={false}>
-      <LessonInner sessionId={id!} onEnd={handleEndSession} ending={ending} />
+      <LessonInner sessionId={id!} onEnd={handleEndSession} ending={ending} serverUrl={serverUrl} />
     </LiveKitRoom>
   );
 }
