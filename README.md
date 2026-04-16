@@ -138,7 +138,7 @@ docker compose up -d
 ```
 
 服務對應：
-- 後端 API：`http://localhost:8000`
+- 後端 API：`http://localhost:8118`
 - PostgreSQL：`localhost:5432`
 - Agent：無對外 port，監聽 LiveKit Cloud 的 room 事件
 

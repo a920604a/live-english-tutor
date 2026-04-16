@@ -85,7 +85,18 @@ export default function LessonPage() {
     getSessionToken(Number(id))
       .then(({ token, url }) => {
         setToken(token);
-        setServerUrl(url);
+        // VITE_LIVEKIT_URL overrides the backend-supplied URL.
+        // For VS Code SSH remote dev: set VITE_LIVEKIT_URL="" (empty string)
+        // in frontend-web/.env.local so the client uses the Vite dev-server
+        // origin (already port-forwarded by VS Code) instead of reaching
+        // ws://localhost:7880 directly.
+        const override = import.meta.env.VITE_LIVEKIT_URL;
+        if (override !== undefined) {
+          // Empty string → use current page origin (Vite dev server, e.g. ws://localhost:5173)
+          setServerUrl(override || `${window.location.origin.replace(/^http/, "ws")}`);
+        } else {
+          setServerUrl(url);
+        }
       })
       .catch(console.error);
   }, [id]);

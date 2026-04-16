@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getReport } from "../api/sessions";
 
@@ -6,23 +6,50 @@ export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [report, setReport] = useState<string | null>(null);
-  const [status, setStatus] = useState<"loading" | "pending" | "ready">("loading");
+  const [status, setStatus] = useState<"loading" | "pending" | "ready" | "unavailable" | "error">("loading");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollCountRef = useRef(0);
 
   useEffect(() => {
     if (!id) return;
 
     const poll = async () => {
-      const result = await getReport(Number(id));
-      if (result.status === "ready" && result.report) {
-        setReport(result.report);
-        setStatus("ready");
-      } else {
-        setStatus("pending");
-        setTimeout(poll, 3000);
+      try {
+        const result = await getReport(Number(id));
+        if (result.status === "ready" && result.report) {
+          setReport(result.report);
+          setStatus("ready");
+        } else {
+          pollCountRef.current += 1;
+          // Stop polling after 40 attempts (~2 minutes) — report generation is disabled or failed.
+          if (pollCountRef.current >= 40) {
+            setStatus("unavailable");
+            return;
+          }
+          setStatus("pending");
+          timerRef.current = setTimeout(poll, 3000);
+        }
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404 || status === 403) {
+          setStatus("error");
+        } else {
+          // Transient network error — retry up to 3 more times then give up.
+          pollCountRef.current += 1;
+          if (pollCountRef.current >= 40) {
+            setStatus("error");
+          } else {
+            timerRef.current = setTimeout(poll, 3000);
+          }
+        }
       }
     };
 
-    poll().catch(console.error);
+    poll();
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [id]);
 
   return (
@@ -66,6 +93,46 @@ export default function ReportPage() {
               <span className="w-2 h-2 rounded-full bg-indigo-400 dot-2" />
               <span className="w-2 h-2 rounded-full bg-indigo-400 dot-3" />
             </div>
+          </div>
+        )}
+
+        {status === "unavailable" && (
+          <div className="flex flex-col items-center py-24 gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-2xl">
+              📋
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">No report available</p>
+              <p className="text-slate-400 text-sm mt-1">
+                Report generation is not enabled for this session.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/")}
+              className="mt-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              Back to Dashboard →
+            </button>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="flex flex-col items-center py-24 gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center text-2xl">
+              ⚠️
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">Could not load report</p>
+              <p className="text-slate-400 text-sm mt-1">
+                This session may not exist or you don't have permission to view it.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/")}
+              className="mt-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              Back to Dashboard →
+            </button>
           </div>
         )}
 

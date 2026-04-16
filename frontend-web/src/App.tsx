@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { useAuthStore } from "./store/authStore";
@@ -51,5 +52,18 @@ export default function App() {
     );
   }
 
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          error: {
+            style: { background: "#fef2f2", color: "#991b1b", border: "1px solid #fca5a5" },
+            iconTheme: { primary: "#ef4444", secondary: "#fff" },
+          },
+        }}
+      />
+      <RouterProvider router={router} />
+    </>
+  );
 }

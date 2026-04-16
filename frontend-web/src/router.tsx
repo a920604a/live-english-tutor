@@ -14,31 +14,38 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export const router = createBrowserRouter([
-  { path: "/login", element: <LoginPage /> },
+export const router = createBrowserRouter(
+  [
+    { path: "/login", element: <LoginPage /> },
+    {
+      path: "/",
+      element: (
+        <RequireAuth>
+          <DashboardPage />
+        </RequireAuth>
+      ),
+    },
+    {
+      path: "/lesson/:id",
+      element: (
+        <RequireAuth>
+          <LessonPage />
+        </RequireAuth>
+      ),
+    },
+    {
+      path: "/report/:id",
+      element: (
+        <RequireAuth>
+          <ReportPage />
+        </RequireAuth>
+      ),
+    },
+    { path: "*", element: <Navigate to="/" replace /> },
+  ],
   {
-    path: "/",
-    element: (
-      <RequireAuth>
-        <DashboardPage />
-      </RequireAuth>
-    ),
-  },
-  {
-    path: "/lesson/:id",
-    element: (
-      <RequireAuth>
-        <LessonPage />
-      </RequireAuth>
-    ),
-  },
-  {
-    path: "/report/:id",
-    element: (
-      <RequireAuth>
-        <ReportPage />
-      </RequireAuth>
-    ),
-  },
-  { path: "*", element: <Navigate to="/" replace /> },
-]);
+    future: {
+      v7_startTransition: true,
+    },
+  }
+);

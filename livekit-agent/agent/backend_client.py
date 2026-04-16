@@ -11,7 +11,7 @@ import os
 
 import httpx
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8118")
 INTERNAL_SECRET = os.getenv("INTERNAL_SECRET", "internal-agent-secret")
 
 logger = logging.getLogger(__name__)

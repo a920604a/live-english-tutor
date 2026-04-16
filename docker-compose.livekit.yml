@@ -25,7 +25,11 @@
 services:
   livekit:
     image: livekit/livekit-server:latest
-    command: --dev          # dev mode: 停用 TLS 強制，允許 ws://（非 wss://）
+    # --dev           : 停用 TLS 強制，允許 ws://（非 wss://）
+    # --node-ip       : ICE candidates 使用 127.0.0.1 loopback，讓 WebRTC media
+    #                   能透過 VS Code SSH port-forward 的 TCP ports 傳輸。
+    #                   （ICE-TCP fallback: LiveKit 在 7881 上提供 TCP 媒體通道）
+    command: --dev --node-ip 127.0.0.1
     environment:
       # LiveKit server 透過 LIVEKIT_KEYS 讀取金鑰，格式為 "key:secret"
       # 與 .env 的 LIVEKIT_API_KEY / LIVEKIT_API_SECRET 共用，無需另設

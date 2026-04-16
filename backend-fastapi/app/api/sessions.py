@@ -9,7 +9,7 @@ from app.config import settings
 from app.models.session import SessionStatus, TutorSession
 from app.models.user import User
 from app.schemas.session import LiveKitTokenOut, SessionCreate, SessionOut
-from app.services.livekit_service import generate_token
+from app.services.livekit_service import ensure_room_and_dispatch, generate_token
 from app.services.report_service import generate_session_report
 
 router = APIRouter()
@@ -62,7 +62,7 @@ def get_session(
 
 
 @router.post("/{session_id}/token", response_model=LiveKitTokenOut)
-def get_livekit_token(
+async def get_livekit_token(
     session_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -72,6 +72,9 @@ def get_livekit_token(
         raise HTTPException(status_code=400, detail="Session already ended")
     session.status = SessionStatus.ACTIVE
     db.commit()
+    # Pre-create the room and explicitly dispatch the agent before the user joins.
+    # This is more reliable than relying on RoomAgentDispatch embedded in the token.
+    await ensure_room_and_dispatch(session.room_name)
     token = generate_token(
         room_name=session.room_name,
         participant_identity=f"user-{current_user.id}",

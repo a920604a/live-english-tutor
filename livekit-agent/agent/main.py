@@ -5,12 +5,16 @@ Run with:
     python -m agent.main start          # production
     python -m agent.main dev            # dev mode (auto-reconnect)
 """
+import asyncio
 import logging
 import os
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from agent.logging_config import setup_logging
+setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 
 from livekit.agents import AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import google
@@ -82,28 +86,28 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.debug("[%d] 🤖 Agent state → %s", session_id, state)
 
     @session.on("user_input_transcribed")
-    async def on_transcript(event) -> None:
+    def on_transcript(event) -> None:
         if not event.is_final:
             return
         text = event.transcript
         logger.info("[%d] 🎤 STUDENT  %s", session_id, text)
-        await backend.post_message(role="student", content=text)
+        asyncio.create_task(backend.post_message(role="student", content=text))
 
     @session.on("agent_speech_committed")
-    async def on_agent_speech(event) -> None:
+    def on_agent_speech(event) -> None:
         content = str(event.user_msg)
         preview = content[:150] + ("…" if len(content) > 150 else "")
         logger.info("[%d] 🔊 EMMA     %s", session_id, preview)
-        await backend.post_message(role="tutor", content=content)
+        asyncio.create_task(backend.post_message(role="tutor", content=content))
 
     @session.on("agent_speech_interrupted")
     def on_agent_speech_interrupted(event) -> None:
         logger.info("[%d] ✋ EMMA speech interrupted by student", session_id)
 
     @session.on("close")
-    async def on_close(event) -> None:
+    def on_close(event) -> None:
         logger.info("━━ Session END    session_id=%d", session_id)
-        await backend.notify_session_ended()
+        asyncio.create_task(backend.notify_session_ended())
 
     # Job shutdown fallback — fires on crash / OOM / forced termination.
     async def _on_job_shutdown(reason: str) -> None:
@@ -118,10 +122,10 @@ async def entrypoint(ctx: JobContext) -> None:
 
     await session.start(agent=agent, room=ctx.room)
 
-    logger.info("[%d] 💬 Sending initial greeting", session_id)
+    student_name = _get_student_name(ctx)
+    logger.info("[%d] 💬 Sending initial greeting  student=%s", session_id, student_name or "(unknown)")
     await session.generate_reply(
-        instructions="Greet the student warmly by name if possible, introduce yourself as Emma, "
-        "and begin the warm-up phase with a friendly opening question."
+        instructions=_build_greeting_instructions(student_name, topic),
     )
 
 
@@ -133,6 +137,28 @@ def _parse_session_id(room_name: str) -> int:
         return int(room_name.split("-", 1)[1])
     except (IndexError, ValueError):
         return 0
+
+
+def _get_student_name(ctx: JobContext) -> str:
+    """Return the first non-agent participant's display name, or empty string."""
+    for p in ctx.room.remote_participants.values():
+        # Agent identity is set by livekit-agents; student identity starts with "user-"
+        if not p.identity.startswith("agent-"):
+            return p.name or p.identity
+    return ""
+
+
+def _build_greeting_instructions(student_name: str, topic: str) -> str:
+    name_clause = f"the student named {student_name}" if student_name else "the student"
+    return (
+        f"You are starting a new English lesson with {name_clause}. "
+        f"Today's topic is: {topic}. "
+        "Begin by briefly reminding them how to interact: they should press and hold "
+        "the microphone button on screen to speak, then release when done. "
+        "Then introduce yourself warmly as Emma, their English tutor. "
+        "Greet them by name if available, and open with a friendly warm-up question "
+        "related to today's topic to get the conversation started."
+    )
 
 
 if __name__ == "__main__":
