@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
+import SpeakPage from "./pages/SpeakPage";
 import LessonPage from "./pages/LessonPage";
 import ReportPage from "./pages/ReportPage";
 import MaterialListPage from "./pages/listen/MaterialListPage";
@@ -25,6 +26,14 @@ export const router = createBrowserRouter(
       element: (
         <RequireAuth>
           <DashboardPage />
+        </RequireAuth>
+      ),
+    },
+    {
+      path: "/speak",
+      element: (
+        <RequireAuth>
+          <SpeakPage />
         </RequireAuth>
       ),
     },
