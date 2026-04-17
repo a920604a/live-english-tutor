@@ -6,6 +6,7 @@ Run with:
     python -m agent.main dev            # dev mode (auto-reconnect)
 """
 import asyncio
+import json
 import logging
 import os
 
@@ -16,7 +17,7 @@ load_dotenv()
 from agent.logging_config import setup_logging
 setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 
-from livekit.agents import AgentSession, JobContext, WorkerOptions, cli
+from livekit.agents import AgentSession, JobContext, RoomInputOptions, WorkerOptions, cli
 from livekit.plugins import google
 
 from agent.backend_client import BackendClient
@@ -92,6 +93,12 @@ async def entrypoint(ctx: JobContext) -> None:
         text = event.transcript
         logger.info("[%d] 🎤 STUDENT  %s", session_id, text)
         asyncio.create_task(backend.post_message(role="student", content=text))
+        asyncio.create_task(
+            ctx.room.local_participant.publish_data(
+                json.dumps({"text": text}).encode(),
+                topic="tutor.transcript.user",
+            )
+        )
 
     @session.on("agent_speech_committed")
     def on_agent_speech(event) -> None:
@@ -120,7 +127,13 @@ async def entrypoint(ctx: JobContext) -> None:
 
     ctx.add_shutdown_callback(_on_job_shutdown)
 
-    await session.start(agent=agent, room=ctx.room)
+    await session.start(
+        agent=agent,
+        room=ctx.room,
+        room_input_options=RoomInputOptions(
+            video_enabled=True,
+        ),
+    )
 
     student_name = _get_student_name(ctx)
     logger.info("[%d] 💬 Sending initial greeting  student=%s", session_id, student_name or "(unknown)")
@@ -153,8 +166,8 @@ def _build_greeting_instructions(student_name: str, topic: str) -> str:
     return (
         f"You are starting a new English lesson with {name_clause}. "
         f"Today's topic is: {topic}. "
-        "Begin by briefly reminding them how to interact: they should press and hold "
-        "the microphone button on screen to speak, then release when done. "
+        "Begin by briefly reminding them how to interact: they should click "
+        "the microphone button on screen to start speaking, and click again to stop. "
         "Then introduce yourself warmly as Emma, their English tutor. "
         "Greet them by name if available, and open with a friendly warm-up question "
         "related to today's topic to get the conversation started."

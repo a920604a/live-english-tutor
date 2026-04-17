@@ -17,7 +17,7 @@ client.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${idToken}`;
   }
   // Tag each request with a timestamp so the response interceptor can log ms.
-  (config as Record<string, unknown>)._startMs = Date.now();
+  (config as unknown as Record<string, unknown>)._startMs = Date.now();
   console.debug(
     `[API] → ${config.method?.toUpperCase()} ${config.baseURL ?? ""}${config.url}`
   );
@@ -27,7 +27,7 @@ client.interceptors.request.use(async (config) => {
 // ── Response interceptor ─────────────────────────────────────────────────────
 client.interceptors.response.use(
   (response) => {
-    const ms = Date.now() - ((response.config as Record<string, unknown>)._startMs as number ?? Date.now());
+    const ms = Date.now() - (((response.config as unknown as Record<string, unknown>)._startMs as number) ?? Date.now());
     console.debug(
       `[API] ← ${response.config.method?.toUpperCase()} ${response.config.url} ${response.status}  ${ms}ms`
     );
