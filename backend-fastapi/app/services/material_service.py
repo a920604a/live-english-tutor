@@ -76,6 +76,12 @@ async def synthesize_chunks(
                 f"{settings.TTS_SERVICE_URL}/api/tts/synthesize",
                 json={"text": chunk_text, "voice": settings.TTS_VOICE},
             )
+            if resp.is_error:
+                logger.error(
+                    "TTS synthesize failed: status=%s body=%s",
+                    resp.status_code,
+                    resp.text,
+                )
             resp.raise_for_status()
             audio_relative_url = resp.json()["audio_url"]
 

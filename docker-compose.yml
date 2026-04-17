@@ -68,6 +68,8 @@ services:
       - AUDIO_DIR=data/audio
       - DB_PATH=data/history.db
       - DEFAULT_WHISPER_MODEL=base
+      - DEFAULT_TTS_VOICE=en-US-JennyNeural
+      - CORS_ALLOW_ORIGINS=http://backend:8000
     networks:
       - tutor-net
     restart: unless-stopped
