@@ -3,6 +3,9 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import LessonPage from "./pages/LessonPage";
 import ReportPage from "./pages/ReportPage";
+import MaterialListPage from "./pages/listen/MaterialListPage";
+import MaterialUploadPage from "./pages/listen/MaterialUploadPage";
+import ListenPlayerPage from "./pages/listen/ListenPlayerPage";
 import { auth } from "./firebase";
 
 /**
@@ -40,6 +43,18 @@ export const router = createBrowserRouter(
           <ReportPage />
         </RequireAuth>
       ),
+    },
+    {
+      path: "/listen",
+      element: <RequireAuth><MaterialListPage /></RequireAuth>,
+    },
+    {
+      path: "/listen/upload",
+      element: <RequireAuth><MaterialUploadPage /></RequireAuth>,
+    },
+    {
+      path: "/listen/:id/player",
+      element: <RequireAuth><ListenPlayerPage /></RequireAuth>,
     },
     { path: "*", element: <Navigate to="/" replace /> },
   ],

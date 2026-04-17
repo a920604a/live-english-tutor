@@ -33,10 +33,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      tts:
+        condition: service_started
     networks:
       - tutor-net
     volumes:
       - ./backend-fastapi/app:/app/app   # 挂载本地 app 目录，便于开发调试
+      - tts-cache:/app/tts_cache
 
   # ── LiveKit Agent Worker ────────────────────────────────────────────────────
   agent:
@@ -54,6 +57,21 @@ services:
     volumes:
       - ./livekit-agent/agent:/app/agent   # 挂载本地 agent 目录，便于开发调试
 
+  # ── stt-tts-unified TTS Service ─────────────────────────────────────────────
+  tts:
+    build:
+      context: ./libs/stt-tts-unified
+      dockerfile: Dockerfile
+    environment:
+      - UPLOAD_DIR=data/uploads
+      - RESULT_DIR=data/results
+      - AUDIO_DIR=data/audio
+      - DB_PATH=data/history.db
+      - DEFAULT_WHISPER_MODEL=base
+    networks:
+      - tutor-net
+    restart: unless-stopped
+
   # ── Ollama（本地自架，已停用 — 使用外部 192.168.15.235:11434）──────────────
   # ollama:
   #   image: ollama/ollama:latest
@@ -66,6 +84,7 @@ services:
 
 volumes:
   postgres-data:
+  tts-cache:
   # ollama-data:
 
 networks:

@@ -1,12 +1,13 @@
 import os
 
 import app.firebase_app  # noqa: F401 — initialize Firebase Admin SDK at startup
+import app.models.material  # noqa: F401 — register Material + ListeningSession with SQLAlchemy
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.api import auth, sessions, messages, agent_callbacks
+from app.api import auth, sessions, messages, agent_callbacks, materials
 from app.logging_config import setup_logging
 from app.middleware import RequestContextMiddleware
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
     app.include_router(messages.router, prefix="/sessions", tags=["messages"])
     app.include_router(agent_callbacks.router, prefix="/internal", tags=["internal"])
+    app.include_router(materials.router, prefix="/materials", tags=["materials"])
 
     return app
 

@@ -120,6 +120,29 @@ export default function DashboardPage() {
           <p className="text-slate-500 mt-1 text-sm">What would you like to practice today?</p>
         </div>
 
+        {/* Feature mode cards */}
+        <section>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
+            Choose a feature
+          </h3>
+          <div className="grid grid-cols-2 gap-4 max-w-lg">
+            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-left text-white shadow-md">
+              <span className="text-3xl mb-3 block">🎙</span>
+              <p className="font-semibold text-base">口說</p>
+              <p className="text-white/70 text-sm mt-1">AI voice conversation</p>
+              <p className="text-white/50 text-xs mt-2">Choose a topic below ↓</p>
+            </div>
+            <button
+              onClick={() => navigate("/listen")}
+              className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-left text-white shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all duration-150"
+            >
+              <span className="text-3xl mb-3 block">📖</span>
+              <p className="font-semibold text-base">聽讀</p>
+              <p className="text-white/70 text-sm mt-1">Listen to articles</p>
+            </button>
+          </div>
+        </section>
+
         {/* Topic cards */}
         <section>
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">

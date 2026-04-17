@@ -34,5 +34,17 @@ class Settings(BaseSettings):
     # Feature toggles
     ENABLE_REPORT_GENERATION: bool = False
 
+    # Cloudflare R2
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = "live-english-tutor-materials"
+    R2_ENDPOINT_URL: str = ""   # https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+
+    # stt-tts-unified TTS service (Docker internal)
+    TTS_SERVICE_URL: str = "http://tts:8000"
+    TTS_VOICE: str = "en-US-JennyNeural"
+    TTS_CACHE_DIR: str = "/app/tts_cache"
+
 
 settings = Settings()

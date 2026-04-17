@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
         "/auth": backendUrl,
         "/sessions": backendUrl,
         "/internal": backendUrl,
+        "/materials": backendUrl,
         "/rtc": {
           target: livekitUrl,
           ws: true,
