@@ -19,6 +19,7 @@ from app.models.user import User
 from app.schemas.material import (
     ListeningSessionCreate,
     ListeningSessionOut,
+    MaterialPlaybackOut,
     MaterialOut,
 )
 from app.services import material_service, r2_service
@@ -225,6 +226,27 @@ async def prepare_material_sse(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/{material_id}/playback", response_model=MaterialPlaybackOut)
+async def get_material_playback(
+    material_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MaterialPlaybackOut:
+    material = _get_owned_material(material_id, current_user.firebase_uid, db)
+
+    loop = asyncio.get_event_loop()
+    pdf_bytes: bytes = await loop.run_in_executor(None, r2_service.download_pdf, material.r2_key)
+    full_text, _ = material_service.extract_text_from_pdf(pdf_bytes)
+    chunks = material_service.chunk_text(full_text)
+
+    return MaterialPlaybackOut(
+        id=material.id,
+        title=material.title,
+        full_text=full_text,
+        chunks=[{"index": index, "text": text} for index, text in enumerate(chunks)],
     )
 
 

@@ -20,6 +20,18 @@ export interface ListeningSession {
   completed: boolean;
 }
 
+export interface MaterialPlaybackChunk {
+  index: number;
+  text: string;
+}
+
+export interface MaterialPlayback {
+  id: number;
+  title: string;
+  full_text: string;
+  chunks: MaterialPlaybackChunk[];
+}
+
 export async function getMaterials(): Promise<Material[]> {
   const { data } = await client.get<Material[]>("/materials/");
   return data;
@@ -53,5 +65,10 @@ export async function recordListeningSession(
 
 export async function getListeningSessions(materialId: number): Promise<ListeningSession[]> {
   const { data } = await client.get<ListeningSession[]>(`/materials/${materialId}/sessions`);
+  return data;
+}
+
+export async function getMaterialPlayback(materialId: number): Promise<MaterialPlayback> {
+  const { data } = await client.get<MaterialPlayback>(`/materials/${materialId}/playback`);
   return data;
 }

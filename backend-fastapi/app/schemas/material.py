@@ -22,6 +22,18 @@ class MaterialOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MaterialPlaybackChunk(BaseModel):
+    index: int
+    text: str
+
+
+class MaterialPlaybackOut(BaseModel):
+    id: int
+    title: str
+    full_text: str
+    chunks: list[MaterialPlaybackChunk]
+
+
 class ListeningSessionCreate(BaseModel):
     duration_sec: int
     completed: bool
