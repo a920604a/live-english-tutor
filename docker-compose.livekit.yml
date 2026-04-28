@@ -1,0 +1,59 @@
+# docker-compose.livekit.yml
+# ── Self-hosted LiveKit Server（獨立 Compose）────────────────────────────────
+#
+# 這是獨立的 Compose 檔，只含 LiveKit server 服務。
+# 主服務（postgres / backend / agent）仍由 docker-compose.yml 管理。
+#
+# 啟動順序（tutor-net 網路需先由主 compose 建立）：
+#   make up          # 先啟動 postgres / backend / agent
+#   make livekit-up  # 再啟動 LiveKit server
+#
+# 停止：
+#   make livekit-down
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Selfhost 模式下 .env 需設定：
+#
+#   LIVEKIT_URL=ws://livekit:7880          ← Agent 連線（Docker 內部 hostname）
+#   LIVEKIT_PUBLIC_URL=ws://localhost:7880  ← 瀏覽器連線（backend 回傳給前端）
+#   LIVEKIT_API_KEY=devkey                  ← 任意非空字串
+#   LIVEKIT_API_SECRET=devsecret           ← 任意非空字串（建議 >=32 chars）
+#
+# Cloud 模式（預設）下無需此 compose 檔，LIVEKIT_PUBLIC_URL 留空即可。
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    # --dev           : 停用 TLS 強制，允許 ws://（非 wss://）
+    # --node-ip       : ICE candidates 使用的 IP。
+    #                   同機瀏覽器（localhost）：127.0.0.1
+    #                   區網其他裝置：設為主機 LAN IP（e.g. 192.168.15.116）
+    #                   透過 LIVEKIT_NODE_IP env var 控制，預設 127.0.0.1
+    command: --dev --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
+    environment:
+      # LiveKit server 透過 LIVEKIT_KEYS 讀取金鑰，格式為 "key:secret"
+      # 與 .env 的 LIVEKIT_API_KEY / LIVEKIT_API_SECRET 共用，無需另設
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+      # ICE UDP port range — 必須與下方 ports 一致
+      # Linux ephemeral ports 通常是 32768-60999，50000-60000 會衝突
+      # 改用 40000-40100（ephemeral range 以外，本機開發 100 個 port 足夠）
+      LIVEKIT_RTC_PORT_RANGE_START: "40000"
+      LIVEKIT_RTC_PORT_RANGE_END: "40100"
+    ports:
+      - "7880:7880"                  # HTTP WebSocket（ws://）— 瀏覽器 + 外部
+      - "7881:7881"                  # HTTPS WebSocket（wss://）— 生產 TLS（dev 未啟用）
+      - "40000-40100:40000-40100/udp" # WebRTC media plane（ICE candidates，音訊流）
+    healthcheck:
+      # livekit-server image 為 minimal，使用 busybox wget 做健康檢查
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7880/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tutor-net
+
+networks:
+  tutor-net:
+    external: true   # 加入主 compose（docker-compose.yml）已建立的共用網路
+                     # 確保 agent 容器可透過 DNS hostname "livekit" 直接連線

@@ -1,0 +1,100 @@
+.history-item {
+  cursor: default;
+  transition: box-shadow var(--dur-short) var(--ease-standard);
+}
+.history-item:hover { box-shadow: var(--shadow-sheet); }
+
+.history-item-header { cursor: pointer; display: flex; flex-direction: column; gap: var(--space-1); }
+
+.history-item-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.type-badge.tts { background: rgba(0, 122, 255, 0.12); color: var(--color-accent); }
+.type-badge.stt { background: rgba(52, 199, 89, 0.12); color: var(--color-success); }
+
+.history-date {
+  font-size: 13px;
+  color: var(--color-label-tertiary);
+}
+
+.history-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.history-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: calc(100% - 40px);
+}
+
+.expand-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-label-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+  min-width: 28px;
+  min-height: 28px;
+  flex-shrink: 0;
+}
+
+.history-sub {
+  font-size: 13px;
+  color: var(--color-label-secondary);
+}
+
+/* ── Body ────────────────────────────────────────────────────────── */
+.history-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-separator);
+}
+
+.history-audio {
+  width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.transcript-preview {
+  max-height: 120px;
+  overflow-y: auto;
+  padding: var(--space-3);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+}
+.transcript-text {
+  font-size: 14px;
+  color: var(--color-label);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.history-actions { display: flex; gap: var(--space-2); }
+
+.btn-sm {
+  font-size: 14px;
+  min-height: 36px;
+  padding: 0 var(--space-4);
+}

@@ -1,0 +1,175 @@
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { getReport } from "../api/sessions";
+
+export default function ReportPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [report, setReport] = useState<string | null>(null);
+  const [status, setStatus] = useState<"loading" | "pending" | "ready" | "unavailable" | "error">("loading");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollCountRef = useRef(0);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const poll = async () => {
+      try {
+        const result = await getReport(Number(id));
+        if (result.status === "ready" && result.report) {
+          setReport(result.report);
+          setStatus("ready");
+        } else if (result.status === "disabled") {
+          setStatus("unavailable");
+        } else {
+          pollCountRef.current += 1;
+          if (pollCountRef.current >= 40) {
+            setStatus("unavailable");
+            return;
+          }
+          setStatus("pending");
+          timerRef.current = setTimeout(poll, 3000);
+        }
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404 || status === 403) {
+          setStatus("error");
+        } else {
+          // Transient network error — retry up to 3 more times then give up.
+          pollCountRef.current += 1;
+          if (pollCountRef.current >= 40) {
+            setStatus("error");
+          } else {
+            timerRef.current = setTimeout(poll, 3000);
+          }
+        }
+      }
+    };
+
+    poll();
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [id]);
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
+          <button
+            onClick={() => navigate("/")}
+            className="text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-1.5"
+          >
+            <span>←</span>
+            <span>Dashboard</span>
+          </button>
+          <span className="text-slate-300">|</span>
+          <span className="text-sm font-semibold text-slate-700">Lesson Report</span>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        {status === "loading" && (
+          <div className="flex flex-col items-center py-24 gap-4">
+            <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
+            <p className="text-slate-400 text-sm">Loading report…</p>
+          </div>
+        )}
+
+        {status === "pending" && (
+          <div className="flex flex-col items-center py-24 gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center text-2xl">
+              📝
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">Generating your report</p>
+              <p className="text-slate-400 text-sm mt-1">
+                Emma is writing up your feedback. This usually takes under a minute.
+              </p>
+            </div>
+            <div className="flex gap-1.5 mt-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-400 dot-1" />
+              <span className="w-2 h-2 rounded-full bg-indigo-400 dot-2" />
+              <span className="w-2 h-2 rounded-full bg-indigo-400 dot-3" />
+            </div>
+          </div>
+        )}
+
+        {status === "unavailable" && (
+          <div className="flex flex-col items-center py-24 gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-2xl">
+              📋
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">No report available</p>
+              <p className="text-slate-400 text-sm mt-1">
+                Report generation is not enabled for this session.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/")}
+              className="mt-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              Back to Dashboard →
+            </button>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="flex flex-col items-center py-24 gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center text-2xl">
+              ⚠️
+            </div>
+            <div>
+              <p className="font-semibold text-slate-700">Could not load report</p>
+              <p className="text-slate-400 text-sm mt-1">
+                This session may not exist or you don't have permission to view it.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/")}
+              className="mt-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              Back to Dashboard →
+            </button>
+          </div>
+        )}
+
+        {status === "ready" && report && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* Report header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-xl flex-shrink-0">
+                🎓
+              </div>
+              <div>
+                <p className="font-bold text-slate-800">Emma's Feedback</p>
+                <p className="text-xs text-slate-400 mt-0.5">Session #{id}</p>
+              </div>
+            </div>
+
+            {/* Report body */}
+            <div className="px-6 py-5">
+              <div className="prose prose-slate max-w-none text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+                {report}
+              </div>
+            </div>
+
+            {/* Footer actions */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <p className="text-xs text-slate-400">Report generated by Emma AI</p>
+              <button
+                onClick={() => navigate("/")}
+                className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                Start new lesson →
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
