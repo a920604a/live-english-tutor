@@ -10,10 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY pyproject.toml .
-RUN uv sync --no-cache
+# Copy stt-tts-unified so path dep "../libs/stt-tts-unified" resolves from /app
+# (pyproject.toml uses path = "../libs/stt-tts-unified", WORKDIR=/app → /libs/stt-tts-unified)
+COPY libs/stt-tts-unified /libs/stt-tts-unified
 
-COPY . .
+# Install Python dependencies (using lock file for reproducible builds)
+COPY livekit-agent/pyproject.toml livekit-agent/uv.lock ./
+RUN uv sync --no-cache --frozen
+
+COPY livekit-agent/agent ./agent
 
 CMD ["uv", "run", "python", "-m", "agent.main", "start"]

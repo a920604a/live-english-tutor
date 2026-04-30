@@ -1,5 +1,10 @@
+# ── 核心基礎服務（永遠需要）────────────────────────────────────────────────────
+# 包含：postgres、backend、stt-tts-unified（backend 的 STT/TTS HTTP API）
+# 不包含：agent、ollama（依模式搭配對應 compose 檔）
+
 services:
-  # ── PostgreSQL（self-hosted）────────────────────────────────────────────────
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16
     environment:
@@ -19,7 +24,6 @@ services:
       - tutor-net
 
   # ── FastAPI Backend ─────────────────────────────────────────────────────────
-  # 前端由 Cloudflare Pages 部署，不需要 frontend 服務。
   backend:
     build:
       context: ./backend-fastapi
@@ -28,7 +32,6 @@ services:
       - "8118:8000"
     env_file: .env
     environment:
-      # Override: ensure Docker service name is used for DB host
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://tutor:tutor@postgres:5432/tutordb}
     depends_on:
       postgres:
@@ -38,26 +41,10 @@ services:
     networks:
       - tutor-net
     volumes:
-      - ./backend-fastapi/app:/app/app   # 挂载本地 app 目录，便于开发调试
+      - ./backend-fastapi/app:/app/app
       - tts-cache:/app/tts_cache
 
-  # ── LiveKit Agent Worker ────────────────────────────────────────────────────
-  agent:
-    build:
-      context: ./livekit-agent
-      dockerfile: Dockerfile
-    env_file: .env
-    environment:
-      # Override: use Docker internal service name instead of localhost
-      BACKEND_URL: http://backend:8000
-    depends_on:
-      - backend
-    networks:
-      - tutor-net
-    volumes:
-      - ./livekit-agent/agent:/app/agent   # 挂载本地 agent 目录，便于开发调试
-
-  # ── stt-tts-unified TTS Service ─────────────────────────────────────────────
+  # ── stt-tts-unified（backend 使用的 HTTP STT/TTS API）───────────────────────
   tts:
     build:
       context: ./libs/stt-tts-unified
@@ -74,22 +61,11 @@ services:
       - tutor-net
     restart: unless-stopped
 
-  # ── Ollama（本地自架，已停用 — 使用外部 192.168.15.235:11434）──────────────
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama-data:/root/.ollama
-  #   networks:
-  #     - tutor-net
-
 volumes:
   postgres-data:
   tts-cache:
-  # ollama-data:
 
 networks:
   tutor-net:
     driver: bridge
-    name: tutor-net   # 固定名稱（不帶 project prefix），供獨立的 docker-compose.livekit.yml 以 external 加入
+    name: tutor-net

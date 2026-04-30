@@ -1,0 +1,29 @@
+# ── LiveKit Agent Worker ────────────────────────────────────────────────────
+# 需搭配 docker-compose.yml 一起使用（共用 tutor-net 網路）
+#
+# Gemini 模式：make up-gemini
+# Local  模式：make up-local（會再加上 docker-compose.ollama.yml）
+#
+# build context 是專案根目錄，因為需要存取 libs/stt-tts-unified
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: livekit-agent/Dockerfile
+    env_file: .env
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - tutor-net
+    volumes:
+      - ./livekit-agent/agent:/app/agent             # 程式碼熱更新
+      - ./libs/stt-tts-unified:/libs/stt-tts-unified # stt-tts-unified 熱更新
+      - ./livekit-agent/models:/app/models           # Kokoro ONNX 模型
+      - whisper-cache:/root/.cache/whisper           # Whisper 模型快取
+    restart: unless-stopped
+
+volumes:
+  whisper-cache:

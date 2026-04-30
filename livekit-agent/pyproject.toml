@@ -4,11 +4,16 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     # Google Gemini Realtime handles STT + LLM + TTS natively (no separate services needed)
-    "livekit-agents[google]~=1.0",
+    "livekit-agents[google,openai]~=1.0",
+    "livekit-plugins-silero",
+    "stt-tts-unified",
     "httpx>=0.28.1",
     "python-dotenv==1.0.1",
     "colorlog>=6.8",
 ]
+
+[tool.uv.sources]
+stt-tts-unified = {path = "../libs/stt-tts-unified", editable = true}
 
 [tool.uv]
 package = false

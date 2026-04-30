@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 
 from dotenv import load_dotenv
 
@@ -17,16 +18,21 @@ load_dotenv()
 from agent.logging_config import setup_logging
 setup_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 
-from livekit.agents import AgentSession, JobContext, RoomInputOptions, WorkerOptions, cli
-from livekit.plugins import google
+from livekit.agents import Agent, JobContext, RoomInputOptions, WorkerOptions, cli
 
+from agent.agent_factory import create_session
 from agent.backend_client import BackendClient
+from agent.prompts import build_local_system_prompt
 from agent.tutor_agent import TutorAgent
 
 logger = logging.getLogger(__name__)
 
 # ── Required environment variable validation ──────────────────────────────────
-_REQUIRED_ENV = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "GOOGLE_API_KEY"]
+_REQUIRED_ENV = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"]
+_AGENT_MODE = os.getenv("AGENT_MODE", "gemini")
+if _AGENT_MODE == "gemini":
+    _REQUIRED_ENV.append("GOOGLE_API_KEY")
+
 _missing = [k for k in _REQUIRED_ENV if not os.getenv(k)]
 if _missing:
     raise RuntimeError(
@@ -68,23 +74,29 @@ async def entrypoint(ctx: JobContext) -> None:
 
     # ── AgentSession ──────────────────────────────────────────────────────────
 
-    session = AgentSession(
-        # Google Gemini Realtime: handles voice input (STT) + reasoning (LLM) + voice output (TTS)
-        # in a single native audio model — no separate STT/TTS services required.
-        llm=google.beta.realtime.RealtimeModel(
-            model="gemini-2.5-flash-native-audio-preview-12-2025",
-        ),
-    )
+    session = create_session(_AGENT_MODE)
 
-    agent = TutorAgent(session_id=session_id, backend=backend, topic=topic)
+    if _AGENT_MODE == "local":
+        # Small local models (llama3.2:3b etc.) don't support function calling.
+        # Use a plain Agent with no tools — pure conversational mode.
+        agent: Agent = Agent(instructions=build_local_system_prompt(topic))
+        logger.info("[%d] agent mode=local  using plain Agent (no function tools)", session_id)
+    else:
+        agent = TutorAgent(session_id=session_id, backend=backend, topic=topic)
 
     # ── Session-level events ──────────────────────────────────────────────────
 
+    _state_timing: dict = {"state": None, "t": time.monotonic()}
+
     @session.on("agent_state_changed")
     def on_agent_state_changed(event) -> None:
-        # state: idle / listening / thinking / speaking
-        state = getattr(event, "state", event)
-        logger.debug("[%d] 🤖 Agent state → %s", session_id, state)
+        state = str(getattr(event, "new_state", getattr(event, "state", event)))
+        now = time.monotonic()
+        elapsed = now - _state_timing["t"]
+        prev = _state_timing["state"] or "—"
+        _state_timing["state"] = state
+        _state_timing["t"] = now
+        logger.info("[%d] 🤖 %s → %s  (%.1fs)", session_id, prev, state, elapsed)
 
     @session.on("user_input_transcribed")
     def on_transcript(event) -> None:

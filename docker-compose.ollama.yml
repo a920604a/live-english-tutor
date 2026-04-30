@@ -1,0 +1,38 @@
+# ── Ollama 本機 LLM ─────────────────────────────────────────────────────────
+# 需搭配 docker-compose.yml + docker-compose.agent.yml 一起使用
+# 僅在 AGENT_MODE=local 時需要
+#
+# 啟動：make up-local
+#
+# 首次啟動會自動 pull OLLAMA_MODEL（預設 llama3.2:3b，約 2GB）
+# 模型存在 ollama-data volume，重啟後不需重新下載
+
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    # 啟動時 serve + pull 模型（已存在則快速跳過）
+    entrypoint: ["/bin/bash", "-c",
+      "ollama serve & sleep 5 && ollama pull ${OLLAMA_MODEL:-llama3.2:3b} && wait"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - tutor-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 600s   # 首次 pull 需要時間
+
+  # Local 模式下讓 agent 等待 ollama 就緒（合併至 docker-compose.agent.yml）
+  agent:
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+volumes:
+  ollama-data:

@@ -562,4 +562,58 @@ Cloudflare Pages
 
 ---
 
+## 9. Agent 模式切換
+
+### 兩種模式
+
+| 模式 | 設定 | STT | LLM | TTS | 外部依賴 |
+|------|------|-----|-----|-----|---------|
+| `gemini`（預設）| `AGENT_MODE=gemini` | Gemini Realtime（內建）| Gemini Realtime（內建）| Gemini Realtime（內建）| Google API Key |
+| `local` | `AGENT_MODE=local` | Whisper（本地）| Ollama（本地）| Kokoro 或 EdgeTTS | Ollama server |
+
+切換模式只需修改 `.env` 中的 `AGENT_MODE`，無需改程式碼。
+
+### Local 模式 TTS 選擇
+
+| `TTS_ENGINE` | 引擎 | 完全離線 | 說明 |
+|---|---|:---:|---|
+| `kokoro`（預設）| Kokoro ONNX | ✅ | 需下載模型檔案（約 310MB）|
+| `edge-tts` | Microsoft Edge TTS | ❌ | 需要網路，英語品質較好 |
+
+### Kokoro 模型下載
+
+Kokoro ONNX 需要兩個模型檔案，放在 `livekit-agent/models/` 目錄下：
+
+```bash
+mkdir -p livekit-agent/models
+# kokoro-v1.0.onnx（~160MB）
+wget -P livekit-agent/models https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+# voices-v1.0.bin（~150MB）
+wget -P livekit-agent/models https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+```
+
+下載後確認路徑（`.env` 預設值）：
+- `KOKORO_MODEL_PATH=models/kokoro-v1.0.onnx`
+- `KOKORO_VOICES_PATH=models/voices-v1.0.bin`
+
+並安裝 optional dependency：
+
+```bash
+cd livekit-agent
+uv add "stt-tts-unified[kokoro]"
+```
+
+### Local 模式最小設定範例
+
+```env
+AGENT_MODE=local
+TTS_ENGINE=kokoro
+OLLAMA_BASE_URL=http://192.168.1.100:11434/v1
+OLLAMA_MODEL=qwen3.5:35b
+KOKORO_MODEL_PATH=models/kokoro-v1.0.onnx
+KOKORO_VOICES_PATH=models/voices-v1.0.bin
+```
+
+---
+
 *Generated from source code — update this document when adding new services or changing API contracts.*
